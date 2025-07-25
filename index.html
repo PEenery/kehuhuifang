@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>上傳維修照片 - 客戶回訪報告</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="header">
+    <h1>客戶回訪報告生成</h1>
+  </div>
+  <div class="container">
+    <div class="upload-section">
+      <h2>上傳維修紀錄照片</h2>
+      <p>請選擇一或多張維修紀錄照片，我們會為您生成專屬回訪報告。</p>
+      <input type="file" id="fileInput" class="file-input" accept="image/*" multiple>
+      <div id="preview" class="preview"></div>
+      <button id="generateBtn">生成報告</button>
+    </div>
+  </div>
+  <script>
+    // 預覽使用者所選的照片
+    const fileInput = document.getElementById('fileInput');
+    const preview = document.getElementById('preview');
+
+    fileInput.addEventListener('change', function() {
+      preview.innerHTML = '';
+      const files = fileInput.files;
+      if (!files || files.length === 0) return;
+      for (const file of files) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          const img = document.createElement('img');
+          img.src = e.target.result;
+          preview.appendChild(img);
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    // 點擊生成報告，將照片資料存入 localStorage 並跳轉
+    document.getElementById('generateBtn').addEventListener('click', function() {
+      const files = fileInput.files;
+      if (!files || files.length === 0) {
+        alert('請先選擇照片！');
+        return;
+      }
+      const imagesData = [];
+      let loadedCount = 0;
+      for (let i = 0; i < files.length; i++) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          imagesData[i] = e.target.result;
+          loadedCount++;
+          if (loadedCount === files.length) {
+            // 所有圖片已讀取完成
+            const reportId = 'report_' + Date.now();
+            try {
+              localStorage.setItem(reportId, JSON.stringify(imagesData));
+            } catch (err) {
+              console.error('保存圖片資料時出現錯誤:', err);
+              alert('保存圖片資料失敗，請稍後再試。');
+              return;
+            }
+            // 跳轉至報告頁面並帶上識別碼
+            window.location.href = 'report.html?id=' + reportId;
+          }
+        };
+        reader.onerror = function(err) {
+          console.error('讀取檔案失敗:', err);
+          alert('讀取檔案失敗，請重新選擇照片。');
+        };
+        reader.readAsDataURL(files[i]);
+      }
+    });
+  </script>
+</body>
+</html>
