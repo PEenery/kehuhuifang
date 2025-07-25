@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>上傳維修照片 - 客戶回訪報告</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="header">
+    <h1>客戶回訪報告生成</h1>
+  </div>
+  <div class="container">
+    <div class="upload-section">
+      <h2>上傳維修紀錄照片</h2>
+      <p>請選擇一或多張維修紀錄照片，我們會為您生成專屬回訪報告。</p>
+      <input type="file" id="fileInput" class="file-input" accept="image/*" multiple>
+      <div id="preview" class="preview"></div>
+      <button id="generateBtn">生成報告</button>
+    </div>
+  </div>
+  <script>
+    // 預覽使用者所選的照片
+    const fileInput = document.getElementById('fileInput');
+    const preview = document.getElementById('preview');
+
+    fileInput.addEventListener('change', function() {
+      preview.innerHTML = '';
+      const files = fileInput.files;
+      if (!files || files.length === 0) return;
+      for (const file of files) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          const img = document.createElement('img');
+          img.src = e.target.result;
+          preview.appendChild(img);
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    /**
+     * 壓縮圖片，將長邊縮至最大 maxDimension，並返回 JPEG 格式的 DataURL。
+     * 這可以顯著減少 base64 字串的大小，避免上傳和儲存佔用過多流量。
+     *
+     * @param {File} file 使用者上傳的圖片檔案
+     * @returns {Promise<string>} 壓縮後圖片的 DataURL
+     */
+    function compressImage(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          const img = new Image();
+          img.onload = function () {
+            const maxDimension = 1024;
+            let { width, height } = img;
+            if (width > height) {
+              if (width > maxDimension) {
+                height = (height * maxDimension) / width;
+                width = maxDimension;
+              }
+            } else {
+              if (height > maxDimension) {
+                width = (width * maxDimension) / height;
+                height = maxDimension;
+              }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+            resolve(compressedDataUrl);
+          };
+          img.onerror = function (err) {
+            reject(err);
+          };
+          img.src = e.target.result;
+        };
+        reader.onerror = function (err) {
+          reject(err);
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // 點擊生成報告，壓縮照片並存入 localStorage 後跳轉
+    /**
+     * 將 DataURL 轉為 Blob，用於 Cloudinary 上傳。
+     * @param {string} dataUrl 圖片的 DataURL
+     * @returns {Promise<Blob>} 轉換後的 Blob
+     */
+    function dataURLToBlob(dataUrl) {
+      return fetch(dataUrl).then(res => res.blob());
+    }
+
+    // 在此填入您從 Cloudinary 後台取得的 cloud name 和 unsigned upload preset
+    // 您的 Cloudinary 帳戶名稱，用來組成上傳端點 URL
+    const CLOUD_NAME = 'djw2gafqe';
+    // 您剛在 Cloudinary 後台建立的 unsigned upload preset 名稱
+    const UPLOAD_PRESET = 'customer_reports';
+
+    document.getElementById('generateBtn').addEventListener('click', async function () {
+      const files = fileInput.files;
+      if (!files || files.length === 0) {
+        alert('請先選擇照片！');
+        return;
+      }
+      try {
+        const imageUrls = [];
+        for (let i = 0; i < files.length; i++) {
+          // 壓縮圖片
+          const dataUrl = await compressImage(files[i]);
+          const blob = await dataURLToBlob(dataUrl);
+          // 準備上傳資料
+          const formData = new FormData();
+          formData.append('file', blob, files[i].name);
+          formData.append('upload_preset', UPLOAD_PRESET);
+          // 上傳到 Cloudinary
+          const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
+            method: 'POST',
+            body: formData
+          });
+          if (!response.ok) {
+            throw new Error('上傳圖片失敗');
+          }
+          const result = await response.json();
+          imageUrls.push(result.secure_url);
+        }
+        // 將圖片網址用逗號串聯並編碼到網址參數中
+        const urlsParam = encodeURIComponent(imageUrls.join(','));
+        window.location.href = 'report.html?urls=' + urlsParam;
+      } catch (err) {
+        console.error('處理照片或上傳時發生錯誤:', err);
+        alert('保存或上傳圖片資料失敗，請稍後再試。');
+      }
+    });
+  </script>
+</body>
+</html>
